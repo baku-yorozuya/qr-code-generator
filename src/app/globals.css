@@ -413,6 +413,80 @@ a {
   animation: rise 1s 0.16s ease both;
 }
 
+.ad-slot {
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ad-top {
+  margin-bottom: 1.25rem;
+}
+
+.ad-bottom {
+  margin-top: 1.25rem;
+}
+
+.ad-slot:empty,
+.ad-slot:not(:has(ins)) {
+  display: none;
+}
+
+.seo-section {
+  margin-top: 2.25rem;
+  padding: 1.25rem 1.35rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in oklab, white 72%, transparent);
+  animation: rise 1s 0.18s ease both;
+}
+
+.seo-section h2 {
+  margin: 0 0 0.65rem;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.55rem;
+  letter-spacing: -0.02em;
+}
+
+.seo-section p,
+.seo-section li {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.seo-section p {
+  margin: 0 0 0.85rem;
+}
+
+.seo-section ul {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.faq-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.faq-list details {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: 0.75rem 0.9rem;
+}
+
+.faq-list summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.faq-list details p {
+  margin: 0.55rem 0 0;
+}
+
 @keyframes rise {
   from {
     opacity: 0;
