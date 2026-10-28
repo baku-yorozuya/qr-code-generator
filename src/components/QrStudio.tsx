@@ -21,6 +21,8 @@ export default function QrStudio() {
   const [, startTransition] = useTransition();
   const mountRef = useRef<HTMLDivElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
+  const maskInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const qrRef = useRef<QRCodeStyling | null>(null);
   const objectUrls = useRef<string[]>([]);
 
@@ -36,6 +38,23 @@ export default function QrStudio() {
   const rememberUrl = (url: string) => {
     objectUrls.current.push(url);
     return url;
+  };
+
+  const clearImage = (key: "maskImageUrl" | "logoUrl") => {
+    setSettings((prev) => {
+      const current = prev[key];
+      if (current) {
+        URL.revokeObjectURL(current);
+        objectUrls.current = objectUrls.current.filter((u) => u !== current);
+      }
+      return { ...prev, [key]: null };
+    });
+    if (key === "maskImageUrl" && maskInputRef.current) {
+      maskInputRef.current.value = "";
+    }
+    if (key === "logoUrl" && logoInputRef.current) {
+      logoInputRef.current.value = "";
+    }
   };
 
   useEffect(() => {
@@ -70,7 +89,16 @@ export default function QrStudio() {
 
     async function sync() {
       if (settings.colorMode === "mask") {
-        if (!settings.maskImageUrl || !maskCanvasRef.current) return;
+        if (!settings.maskImageUrl || !maskCanvasRef.current) {
+          const target = maskCanvasRef.current;
+          if (target) {
+            const ctx = target.getContext("2d");
+            target.width = sizePx;
+            target.height = sizePx;
+            ctx?.clearRect(0, 0, sizePx, sizePx);
+          }
+          return;
+        }
         try {
           const canvas = await renderMaskedQr({
             data: settings.data || " ",
@@ -80,6 +108,9 @@ export default function QrStudio() {
             imageUrl: settings.maskImageUrl,
             invert: settings.maskInvert,
             bgColor: settings.bgColor,
+            dotType: settings.dotType,
+            cornerSquareType: settings.cornerSquareType,
+            cornerDotType: settings.cornerDotType,
           });
           const target = maskCanvasRef.current;
           const ctx = target.getContext("2d");
@@ -107,21 +138,37 @@ export default function QrStudio() {
     if (!file) return;
     const url = rememberUrl(URL.createObjectURL(file));
     if (key === "maskImageUrl") {
-      setSettings((prev) => ({
-        ...prev,
-        maskImageUrl: url,
-        colorMode: "mask",
-        errorCorrectionLevel: "H",
-      }));
+      setSettings((prev) => {
+        if (prev.maskImageUrl) {
+          URL.revokeObjectURL(prev.maskImageUrl);
+          objectUrls.current = objectUrls.current.filter(
+            (u) => u !== prev.maskImageUrl,
+          );
+        }
+        return {
+          ...prev,
+          maskImageUrl: url,
+          colorMode: "mask",
+          errorCorrectionLevel: "H",
+        };
+      });
       return;
     }
-    update(key, url);
+    setSettings((prev) => {
+      if (prev.logoUrl) {
+        URL.revokeObjectURL(prev.logoUrl);
+        objectUrls.current = objectUrls.current.filter(
+          (u) => u !== prev.logoUrl,
+        );
+      }
+      return { ...prev, logoUrl: url };
+    });
   };
 
   const download = async (ext: "png" | "svg") => {
     if (settings.colorMode === "mask") {
       const canvas = maskCanvasRef.current;
-      if (!canvas) return;
+      if (!canvas || !settings.maskImageUrl) return;
       const link = document.createElement("a");
       link.download = "dotmask-qr.png";
       link.href = canvas.toDataURL("image/png");
@@ -213,7 +260,6 @@ export default function QrStudio() {
               <span>Module style</span>
               <select
                 value={settings.dotType}
-                disabled={!showStyled}
                 onChange={(e) =>
                   update("dotType", e.target.value as QrSettings["dotType"])
                 }
@@ -232,7 +278,6 @@ export default function QrStudio() {
               <span>Finder outer</span>
               <select
                 value={settings.cornerSquareType}
-                disabled={!showStyled}
                 onChange={(e) =>
                   update(
                     "cornerSquareType",
@@ -251,7 +296,6 @@ export default function QrStudio() {
               <span>Finder center</span>
               <select
                 value={settings.cornerDotType}
-                disabled={!showStyled}
                 onChange={(e) =>
                   update(
                     "cornerDotType",
@@ -320,16 +364,13 @@ export default function QrStudio() {
 
             {settings.colorMode === "mask" ? (
               <div className="row-2 mask-row">
-                <label className="field">
-                  <span>Mask image</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) =>
-                      onFile(e.target.files?.[0], "maskImageUrl")
-                    }
-                  />
-                </label>
+                <ImageField
+                  label="Mask image"
+                  inputRef={maskInputRef}
+                  previewUrl={settings.maskImageUrl}
+                  onChange={(file) => onFile(file, "maskImageUrl")}
+                  onClear={() => clearImage("maskImageUrl")}
+                />
                 <label className="check invert-switch">
                   <input
                     type="checkbox"
@@ -435,14 +476,13 @@ export default function QrStudio() {
 
           {showStyled ? (
             <div className="control-row">
-              <label className="field">
-                <span>Center logo (optional)</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => onFile(e.target.files?.[0], "logoUrl")}
-                />
-              </label>
+              <ImageField
+                label="Center logo (optional)"
+                inputRef={logoInputRef}
+                previewUrl={settings.logoUrl}
+                onChange={(file) => onFile(file, "logoUrl")}
+                onClear={() => clearImage("logoUrl")}
+              />
               {settings.logoUrl ? (
                 <label className="field logo-size">
                   <span>Logo size {Math.round(settings.logoSize * 100)}%</span>
@@ -461,6 +501,47 @@ export default function QrStudio() {
           ) : null}
         </div>
       </section>
+    </div>
+  );
+}
+
+function ImageField({
+  label,
+  inputRef,
+  previewUrl,
+  onChange,
+  onClear,
+}: {
+  label: string;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  previewUrl: string | null;
+  onChange: (file: File | undefined) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="field image-field">
+      <span>{label}</span>
+      <div className="image-controls">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          onChange={(e) => onChange(e.target.files?.[0])}
+        />
+        {previewUrl ? (
+          <div className="image-preview-row">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={previewUrl} alt="" className="image-thumb" />
+            <button
+              type="button"
+              className="btn-ghost btn-danger"
+              onClick={onClear}
+            >
+              Delete
+            </button>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

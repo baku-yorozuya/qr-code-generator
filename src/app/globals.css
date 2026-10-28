@@ -375,6 +375,37 @@ a {
   margin-top: 0.65rem;
 }
 
+.image-controls {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.image-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.image-thumb {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.btn-danger {
+  color: #9f1239;
+  border-color: color-mix(in oklab, #9f1239 28%, var(--line));
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #fff1f2;
+  border-color: #9f1239;
+  color: #9f1239;
+}
+
 .foot {
   margin-top: 1.75rem;
   color: var(--muted);
