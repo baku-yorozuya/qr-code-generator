@@ -9,7 +9,10 @@ import {
   DEFAULT_SETTINGS,
   DOT_STYLES,
   PRESETS,
+  SIZE_UNITS,
+  resolveSizePx,
   type QrSettings,
+  type SizeUnit,
 } from "@/lib/types";
 
 export default function QrStudio() {
@@ -20,6 +23,9 @@ export default function QrStudio() {
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const qrRef = useRef<QRCodeStyling | null>(null);
   const objectUrls = useRef<string[]>([]);
+
+  const sizePx = resolveSizePx(settings);
+  const showStyled = settings.colorMode !== "mask";
 
   const update = <K extends keyof QrSettings>(key: K, value: QrSettings[K]) => {
     startTransition(() => {
@@ -45,8 +51,8 @@ export default function QrStudio() {
       const { default: QRCodeStyling } = await import("qr-code-styling");
       if (cancelled || !mountRef.current) return;
 
-      const instance = new QRCodeStyling(buildOptions(settings));
-      mountRef.current.innerHTML = "";
+      const instance = new QRCodeStyling(buildOptions(settings, sizePx));
+      mountRef.current.replaceChildren();
       instance.append(mountRef.current);
       qrRef.current = instance;
       setReady(true);
@@ -68,7 +74,7 @@ export default function QrStudio() {
         try {
           const canvas = await renderMaskedQr({
             data: settings.data || " ",
-            size: settings.size,
+            size: sizePx,
             margin: settings.margin,
             errorCorrectionLevel: settings.errorCorrectionLevel,
             imageUrl: settings.maskImageUrl,
@@ -78,9 +84,9 @@ export default function QrStudio() {
           const target = maskCanvasRef.current;
           const ctx = target.getContext("2d");
           if (!ctx) return;
-          target.width = settings.size;
-          target.height = settings.size;
-          ctx.clearRect(0, 0, settings.size, settings.size);
+          target.width = sizePx;
+          target.height = sizePx;
+          ctx.clearRect(0, 0, sizePx, sizePx);
           ctx.drawImage(canvas, 0, 0);
         } catch {
           // Keep previous frame if mask image fails.
@@ -88,11 +94,11 @@ export default function QrStudio() {
         return;
       }
 
-      qrRef.current?.update(buildOptions(settings));
+      qrRef.current?.update(buildOptions(settings, sizePx));
     }
 
     sync();
-  }, [settings, ready]);
+  }, [settings, ready, sizePx]);
 
   const onFile = (
     file: File | undefined,
@@ -117,15 +123,13 @@ export default function QrStudio() {
       const canvas = maskCanvasRef.current;
       if (!canvas) return;
       const link = document.createElement("a");
-      link.download = `dotmask-qr.${ext === "svg" ? "png" : ext}`;
+      link.download = "dotmask-qr.png";
       link.href = canvas.toDataURL("image/png");
       link.click();
       return;
     }
     await qrRef.current?.download({ name: "dotmask-qr", extension: ext });
   };
-
-  const showStyled = settings.colorMode !== "mask";
 
   return (
     <div className="studio">
@@ -142,16 +146,20 @@ export default function QrStudio() {
             className="mask-canvas"
             hidden={showStyled}
             aria-hidden={showStyled}
-            width={settings.size}
-            height={settings.size}
+            width={sizePx}
+            height={sizePx}
           />
-          {!settings.maskImageUrl && settings.colorMode === "mask" && (
+          {!settings.maskImageUrl && settings.colorMode === "mask" ? (
             <p className="mask-hint">Upload a photo to mask the QR modules.</p>
-          )}
+          ) : null}
         </div>
 
         <div className="preview-actions">
-          <button type="button" className="btn-primary" onClick={() => download("png")}>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => download("png")}
+          >
             Download PNG
           </button>
           <button
@@ -167,95 +175,177 @@ export default function QrStudio() {
       </section>
 
       <section className="controls" aria-label="QR settings">
-        <label className="field">
-          <span>Content</span>
-          <textarea
-            value={settings.data}
-            onChange={(e) => update("data", e.target.value)}
-            rows={3}
-            placeholder="URL or text"
-          />
-        </label>
+        <div className="control-row">
+          <label className="field">
+            <span>Content</span>
+            <textarea
+              value={settings.data}
+              onChange={(e) => update("data", e.target.value)}
+              rows={3}
+              placeholder="URL or text"
+            />
+          </label>
+        </div>
 
-        <div className="field">
-          <span>Presets</span>
-          <div className="chip-row">
-            {PRESETS.map((preset) => (
-              <button
-                key={preset.name}
-                type="button"
-                className="chip"
-                onClick={() =>
-                  setSettings((prev) => ({ ...prev, ...preset.patch }))
+        <div className="control-row">
+          <div className="field">
+            <span>Presets</span>
+            <div className="chip-row">
+              {PRESETS.map((preset) => (
+                <button
+                  key={preset.name}
+                  type="button"
+                  className="chip"
+                  onClick={() =>
+                    setSettings((prev) => ({ ...prev, ...preset.patch }))
+                  }
+                >
+                  {preset.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="settings-block">
+          <div className="control-row">
+            <label className="field">
+              <span>Module style</span>
+              <select
+                value={settings.dotType}
+                disabled={!showStyled}
+                onChange={(e) =>
+                  update("dotType", e.target.value as QrSettings["dotType"])
                 }
               >
-                {preset.name}
-              </button>
-            ))}
+                {DOT_STYLES.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-        </div>
 
-        <div className="field">
-          <span>Fill</span>
-          <div className="segmented" role="tablist" aria-label="Fill mode">
-            {(
-              [
-                ["solid", "Solid"],
-                ["gradient", "Gradient"],
-                ["mask", "Image mask"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                aria-selected={settings.colorMode === value}
-                className={settings.colorMode === value ? "active" : ""}
-                onClick={() => update("colorMode", value)}
+          <div className="control-row row-2">
+            <label className="field">
+              <span>Finder outer</span>
+              <select
+                value={settings.cornerSquareType}
+                disabled={!showStyled}
+                onChange={(e) =>
+                  update(
+                    "cornerSquareType",
+                    e.target.value as QrSettings["cornerSquareType"],
+                  )
+                }
               >
-                {label}
-              </button>
-            ))}
+                {CORNER_SQUARE_STYLES.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Finder center</span>
+              <select
+                value={settings.cornerDotType}
+                disabled={!showStyled}
+                onChange={(e) =>
+                  update(
+                    "cornerDotType",
+                    e.target.value as QrSettings["cornerDotType"],
+                  )
+                }
+              >
+                {CORNER_DOT_STYLES.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-        </div>
 
-        {settings.colorMode === "solid" && (
-          <div className="row-2">
-            <ColorField
-              label="Foreground"
-              value={settings.fgColor}
-              onChange={(v) => update("fgColor", v)}
-            />
-            <ColorField
-              label="Background"
-              value={settings.bgColor}
-              onChange={(v) => update("bgColor", v)}
-            />
-          </div>
-        )}
-
-        {settings.colorMode === "gradient" && (
-          <>
-            <div className="row-2">
-              <ColorField
-                label="From"
-                value={settings.gradientFrom}
-                onChange={(v) => update("gradientFrom", v)}
-              />
-              <ColorField
-                label="To"
-                value={settings.gradientTo}
-                onChange={(v) => update("gradientTo", v)}
-              />
+          <div className="control-row">
+            <div className="field">
+              <span>Fill</span>
+              <div className="segmented" role="tablist" aria-label="Fill mode">
+                {(
+                  [
+                    ["solid", "Solid"],
+                    ["gradient", "Gradient"],
+                    ["mask", "Image mask"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="tab"
+                    aria-selected={settings.colorMode === value}
+                    className={settings.colorMode === value ? "active" : ""}
+                    onClick={() => update("colorMode", value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <ColorField
-              label="Background"
-              value={settings.bgColor}
-              onChange={(v) => update("bgColor", v)}
-            />
-            <div className="row-2">
+          </div>
+
+          <div className="control-row">
+            {settings.colorMode === "solid" ? (
+              <ColorField
+                label="Foreground"
+                value={settings.fgColor}
+                onChange={(v) => update("fgColor", v)}
+              />
+            ) : null}
+
+            {settings.colorMode === "gradient" ? (
+              <div className="row-2">
+                <ColorField
+                  label="From"
+                  value={settings.gradientFrom}
+                  onChange={(v) => update("gradientFrom", v)}
+                />
+                <ColorField
+                  label="To"
+                  value={settings.gradientTo}
+                  onChange={(v) => update("gradientTo", v)}
+                />
+              </div>
+            ) : null}
+
+            {settings.colorMode === "mask" ? (
+              <div className="row-2 mask-row">
+                <label className="field">
+                  <span>Mask image</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) =>
+                      onFile(e.target.files?.[0], "maskImageUrl")
+                    }
+                  />
+                </label>
+                <label className="check invert-switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.maskInvert}
+                    onChange={(e) => update("maskInvert", e.target.checked)}
+                  />
+                  Invert mask
+                </label>
+              </div>
+            ) : null}
+          </div>
+
+          {settings.colorMode === "gradient" ? (
+            <div className="control-row row-2">
               <label className="field">
-                <span>Gradient</span>
+                <span>Gradient type</span>
                 <select
                   value={settings.gradientType}
                   onChange={(e) =>
@@ -282,146 +372,93 @@ export default function QrStudio() {
                 />
               </label>
             </div>
-          </>
-        )}
+          ) : null}
 
-        {settings.colorMode === "mask" && (
-          <>
-            <label className="field">
-              <span>Mask image</span>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => onFile(e.target.files?.[0], "maskImageUrl")}
-              />
-            </label>
+          <div className="control-row">
             <ColorField
               label="Background"
               value={settings.bgColor}
               onChange={(v) => update("bgColor", v)}
             />
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={settings.maskInvert}
-                onChange={(e) => update("maskInvert", e.target.checked)}
-              />
-              Invert mask (photo in quiet zones)
-            </label>
-          </>
-        )}
+          </div>
 
-        {settings.colorMode !== "mask" && (
-          <>
+          <div className="control-row row-2">
             <label className="field">
-              <span>Module style</span>
-              <select
-                value={settings.dotType}
-                onChange={(e) =>
-                  update("dotType", e.target.value as QrSettings["dotType"])
-                }
-              >
-                {DOT_STYLES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className="row-2">
-              <label className="field">
-                <span>Finder outer</span>
-                <select
-                  value={settings.cornerSquareType}
-                  onChange={(e) =>
-                    update(
-                      "cornerSquareType",
-                      e.target.value as QrSettings["cornerSquareType"],
-                    )
-                  }
-                >
-                  {CORNER_SQUARE_STYLES.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Finder center</span>
-                <select
-                  value={settings.cornerDotType}
-                  onChange={(e) =>
-                    update(
-                      "cornerDotType",
-                      e.target.value as QrSettings["cornerDotType"],
-                    )
-                  }
-                >
-                  {CORNER_DOT_STYLES.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <label className="field">
-              <span>Center logo (optional)</span>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => onFile(e.target.files?.[0], "logoUrl")}
-              />
-            </label>
-            {settings.logoUrl && (
-              <label className="field">
-                <span>Logo size {Math.round(settings.logoSize * 100)}%</span>
+              <span>
+                Size
+                <em className="size-hint">{sizePx}px render</em>
+              </span>
+              <div className="size-row">
                 <input
-                  type="range"
-                  min={12}
-                  max={35}
-                  value={Math.round(settings.logoSize * 100)}
+                  type="number"
+                  min={settings.sizeUnit === "px" ? 64 : 1}
+                  max={settings.sizeUnit === "px" ? 2048 : 100}
+                  step={settings.sizeUnit === "rem" ? 0.25 : 1}
+                  value={settings.sizeValue}
                   onChange={(e) =>
-                    update("logoSize", Number(e.target.value) / 100)
+                    update("sizeValue", Number(e.target.value) || 0)
                   }
                 />
-              </label>
-            )}
-          </>
-        )}
+                <select
+                  value={settings.sizeUnit}
+                  aria-label="Size unit"
+                  onChange={(e) =>
+                    update("sizeUnit", e.target.value as SizeUnit)
+                  }
+                >
+                  {SIZE_UNITS.map((unit) => (
+                    <option key={unit.value} value={unit.value}>
+                      {unit.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </label>
+            <label className="field">
+              <span>Error correction</span>
+              <select
+                value={settings.errorCorrectionLevel}
+                onChange={(e) =>
+                  update(
+                    "errorCorrectionLevel",
+                    e.target.value as QrSettings["errorCorrectionLevel"],
+                  )
+                }
+              >
+                <option value="L">L — 7%</option>
+                <option value="M">M — 15%</option>
+                <option value="Q">Q — 25%</option>
+                <option value="H">H — 30%</option>
+              </select>
+            </label>
+          </div>
 
-        <div className="row-2">
-          <label className="field">
-            <span>Size {settings.size}px</span>
-            <input
-              type="range"
-              min={200}
-              max={512}
-              step={8}
-              value={settings.size}
-              onChange={(e) => update("size", Number(e.target.value))}
-            />
-          </label>
-          <label className="field">
-            <span>Error correction</span>
-            <select
-              value={settings.errorCorrectionLevel}
-              onChange={(e) =>
-                update(
-                  "errorCorrectionLevel",
-                  e.target.value as QrSettings["errorCorrectionLevel"],
-                )
-              }
-            >
-              <option value="L">L — 7%</option>
-              <option value="M">M — 15%</option>
-              <option value="Q">Q — 25%</option>
-              <option value="H">H — 30%</option>
-            </select>
-          </label>
+          {showStyled ? (
+            <div className="control-row">
+              <label className="field">
+                <span>Center logo (optional)</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => onFile(e.target.files?.[0], "logoUrl")}
+                />
+              </label>
+              {settings.logoUrl ? (
+                <label className="field logo-size">
+                  <span>Logo size {Math.round(settings.logoSize * 100)}%</span>
+                  <input
+                    type="range"
+                    min={12}
+                    max={35}
+                    value={Math.round(settings.logoSize * 100)}
+                    onChange={(e) =>
+                      update("logoSize", Number(e.target.value) / 100)
+                    }
+                  />
+                </label>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </section>
     </div>
@@ -461,7 +498,7 @@ function normalizeHex(value: string) {
   return /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000";
 }
 
-function buildOptions(settings: QrSettings) {
+function buildOptions(settings: QrSettings, sizePx: number) {
   const fill =
     settings.colorMode === "gradient"
       ? {
@@ -481,8 +518,8 @@ function buildOptions(settings: QrSettings) {
         };
 
   return {
-    width: settings.size,
-    height: settings.size,
+    width: sizePx,
+    height: sizePx,
     type: "canvas" as const,
     data: settings.data || " ",
     margin: settings.margin,

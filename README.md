@@ -11,18 +11,15 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Live
+
+https://pic-qr-code-generator.vercel.app
+
 ## Deploy on Vercel (GitHub)
 
-1. Push this repo to GitHub under your account (`bakuyorozuya` / Baku Yorozuya).
-2. Go to [vercel.com/new](https://vercel.com/new) and sign in with GitHub.
-3. Import the `qr-code-generator` repository.
-4. Keep the default Next.js settings and click **Deploy**.
+Repo: https://github.com/baku-yorozuya/qr-code-generator
 
-Or with the Vercel CLI after `npm i -g vercel`:
-
-```bash
-npx vercel
-```
+Connected to Vercel — pushes to `main` redeploy automatically.
 
 ## Stack
 

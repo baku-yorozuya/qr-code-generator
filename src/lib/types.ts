@@ -30,9 +30,15 @@ export type GradientType = "linear" | "radial";
 
 export type ErrorCorrectionLevel = "L" | "M" | "Q" | "H";
 
+export type SizeUnit = "px" | "%" | "rem";
+
+/** Reference width used when size unit is `%`. */
+export const SIZE_PERCENT_BASE = 1024;
+
 export interface QrSettings {
   data: string;
-  size: number;
+  sizeValue: number;
+  sizeUnit: SizeUnit;
   margin: number;
   errorCorrectionLevel: ErrorCorrectionLevel;
   dotType: DotType;
@@ -53,7 +59,8 @@ export interface QrSettings {
 
 export const DEFAULT_SETTINGS: QrSettings = {
   data: "https://vercel.com",
-  size: 320,
+  sizeValue: 512,
+  sizeUnit: "px",
   margin: 12,
   errorCorrectionLevel: "H",
   dotType: "rounded",
@@ -71,6 +78,23 @@ export const DEFAULT_SETTINGS: QrSettings = {
   logoUrl: null,
   logoSize: 0.22,
 };
+
+export function resolveSizePx(settings: Pick<QrSettings, "sizeValue" | "sizeUnit">) {
+  const raw =
+    settings.sizeUnit === "px"
+      ? settings.sizeValue
+      : settings.sizeUnit === "%"
+        ? (settings.sizeValue / 100) * SIZE_PERCENT_BASE
+        : settings.sizeValue * 16;
+
+  return Math.min(2048, Math.max(64, Math.round(raw)));
+}
+
+export const SIZE_UNITS: { value: SizeUnit; label: string }[] = [
+  { value: "px", label: "px" },
+  { value: "%", label: "%" },
+  { value: "rem", label: "rem" },
+];
 
 export const DOT_STYLES: { value: DotType; label: string }[] = [
   { value: "square", label: "Square" },
